@@ -91,10 +91,10 @@ class EmailTriageEnvironment(Environment):
                 sender="",
                 task_level=self._task_level,
                 feedback="Call reset() to start.",
-                score=0.0,
+                score=0.01,
                 emails_remaining=0,
                 done=True,
-                reward=0.0,
+                reward=0.01,
             )
 
         self._state.step_count += 1
