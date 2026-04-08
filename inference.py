@@ -139,76 +139,45 @@ def get_model_action(client: OpenAI, obs, step: int, history: List[str]) -> Tria
 
 
 # ── Main episode loop ─────────────────────────────────────────────────────────
-async def main() -> None:
-    # Read API credentials directly from environment — these are injected by the
-    # hackathon validator and must NOT be overridden by any .env file or default.
-    api_key      = os.environ.get("API_KEY") or os.environ.get("HF_TOKEN") or os.environ.get("OPENAI_API_KEY")
-    api_base_url = os.environ.get("API_BASE_URL")  # NO default — must be injected by validator
-
-    if not api_key:
-        raise EnvironmentError(
-            "API_KEY is not set. The hackathon validator injects API_KEY automatically.\n"
-            "For local testing: export API_KEY=hf_your_token_here"
-        )
-    if not api_base_url:
-        # Fall back for local testing only; validator always injects this
-        api_base_url = "https://router.huggingface.co/v1"
-        print(f"[DEBUG] API_BASE_URL not set — using fallback: {api_base_url}", flush=True)
-
-    print(f"[DEBUG] API_BASE_URL={api_base_url}", flush=True)
-    print(f"[DEBUG] MODEL_NAME={MODEL_NAME}", flush=True)
-
-    # Create OpenAI client pointed at the validator's LiteLLM proxy
-    client = OpenAI(api_key=api_key, base_url=api_base_url)
-
-    # Connect to environment — Docker image or running server
-    if LOCAL_IMAGE_NAME:
-        print(f"[DEBUG] Connecting via Docker image: {LOCAL_IMAGE_NAME}", flush=True)
-        env = await EmailTriageEnv.from_docker_image(LOCAL_IMAGE_NAME)
-    else:
-        print(f"[DEBUG] Connecting to server: {ENV_BASE_URL}", flush=True)
-        env = EmailTriageEnv(base_url=ENV_BASE_URL)
-
-    history:     List[str]  = []
+async def run_episode(
+    client: OpenAI,
+    env: EmailTriageEnv,
+    task_level: str,
+) -> None:
+    """Run one full episode for a given task level, emitting START/STEP/END logs."""
+    history:     List[str]   = []
     rewards:     List[float] = []
     steps_taken: int         = 0
-    score:       float       = 0.0
+    score:       float       = 0.01
     success:     bool        = False
 
-    log_start(task=TASK_LEVEL, env=BENCHMARK, model=MODEL_NAME)
+    log_start(task=task_level, env=BENCHMARK, model=MODEL_NAME)
 
     try:
-        # Reset episode
-        reset_result = await env.reset(seed=42, task_level=TASK_LEVEL)
-        # reset() may return a StepResult or the observation directly
+        reset_result = await env.reset(seed=42, task_level=task_level)
         obs = reset_result.observation if hasattr(reset_result, "observation") else reset_result
 
         for step in range(1, MAX_STEPS + 1):
             if obs.done or obs.email_id == "none":
                 break
 
-            # Get LLM decision
             action = get_model_action(client, obs, step, history)
 
-            # Compact action string for logging (no newlines)
             action_str = (
                 f"category={action.category},priority={action.priority},"
                 f"department={action.department},"
                 f"reply={repr(action.reply[:40]) if action.reply else repr('')}"
             )
 
-            # Step the environment
             result = await env.step(action)
 
-            reward      = result.reward or 0.0
+            reward      = result.reward or 0.01
             done        = result.done
-            error       = None
             steps_taken = step
             obs         = result.observation
 
             rewards.append(reward)
-
-            log_step(step=step, action=action_str, reward=reward, done=done, error=error)
+            log_step(step=step, action=action_str, reward=reward, done=done, error=None)
 
             history.append(
                 f"Step {step} [{obs.email_id}]: "
@@ -219,22 +188,61 @@ async def main() -> None:
             if done:
                 break
 
-        # Compute final score: average reward, clamped strictly to (0.01, 0.99)
-        # Validator requires score strictly between 0 and 1 (not 0.0, not 1.0)
-        score   = sum(rewards) / len(rewards) if rewards else 0.0
-        score   = min(max(score, 0.01), 0.99)
+        score   = sum(rewards) / len(rewards) if rewards else 0.01
+        score   = min(max(score, 0.01), 0.99)   # strictly (0, 1) as required
         success = score >= SUCCESS_SCORE_THRESHOLD
 
     except Exception as exc:
-        print(f"[DEBUG] Episode error: {exc}", flush=True)
+        print(f"[DEBUG] Episode error ({task_level}): {exc}", flush=True)
+        score = 0.01
 
+    log_end(success=success, steps=steps_taken, score=score, rewards=rewards)
+
+
+async def main() -> None:
+    api_key      = os.environ.get("API_KEY") or os.environ.get("HF_TOKEN") or os.environ.get("OPENAI_API_KEY")
+    api_base_url = os.environ.get("API_BASE_URL")
+
+    if not api_key:
+        raise EnvironmentError(
+            "API_KEY is not set. The hackathon validator injects API_KEY automatically.\n"
+            "For local testing: export API_KEY=hf_your_token_here"
+        )
+    if not api_base_url:
+        api_base_url = "https://router.huggingface.co/v1"
+        print(f"[DEBUG] API_BASE_URL not set — using fallback: {api_base_url}", flush=True)
+
+    print(f"[DEBUG] API_BASE_URL={api_base_url}", flush=True)
+    print(f"[DEBUG] MODEL_NAME={MODEL_NAME}", flush=True)
+
+    client = OpenAI(api_key=api_key, base_url=api_base_url)
+
+    # Determine which task levels to run.
+    # If TASK_LEVEL is set to a specific level, run only that one;
+    # otherwise run ALL THREE so the validator sees 3 graded tasks.
+    requested = os.environ.get("TASK_LEVEL", "").strip().lower()
+    if requested in ("easy", "medium", "hard"):
+        task_levels = [requested]
+    else:
+        task_levels = ["easy", "medium", "hard"]
+
+    print(f"[DEBUG] Running task levels: {task_levels}", flush=True)
+
+    if LOCAL_IMAGE_NAME:
+        print(f"[DEBUG] Connecting via Docker image: {LOCAL_IMAGE_NAME}", flush=True)
+        env = await EmailTriageEnv.from_docker_image(LOCAL_IMAGE_NAME)
+    else:
+        print(f"[DEBUG] Connecting to server: {ENV_BASE_URL}", flush=True)
+        env = EmailTriageEnv(base_url=ENV_BASE_URL)
+
+    try:
+        for task_level in task_levels:
+            await run_episode(client, env, task_level)
     finally:
         try:
             await env.close()
         except Exception as e:
             print(f"[DEBUG] env.close() error: {e}", flush=True)
-
-        log_end(success=success, steps=steps_taken, score=score, rewards=rewards)
 
 
 if __name__ == "__main__":
