@@ -1,31 +1,20 @@
 """
 Inference Script — Email Triage RL Environment
 ===================================
-MANDATORY environment variables:
-    API_BASE_URL        The API endpoint for the LLM
-                        (default: https://router.huggingface.co/v1)
-    MODEL_NAME          The model identifier
-                        (default: Qwen/Qwen2.5-72B-Instruct)
-    HF_TOKEN            Your Hugging Face / API key
-    LOCAL_IMAGE_NAME    Docker image name (if using from_docker_image())
+MANDATORY environment variables (injected by hackathon validator):
+    API_BASE_URL        The LiteLLM proxy endpoint (REQUIRED)
+    API_KEY             The proxy API key (REQUIRED)
+    MODEL_NAME          The model identifier (default: gpt-4o-mini)
+    TASK_LEVEL          easy | medium | hard (default: easy)
 
 STDOUT FORMAT (required by hackathon evaluator):
     [START] task=<task_name> env=<benchmark> model=<model_name>
     [STEP]  step=<n> action=<action_str> reward=<0.00> done=<true|false> error=<msg|null>
     [END]   success=<true|false> steps=<n> score=<score> rewards=<r1,r2,...,rn>
 
-Usage:
-    # Against local server (start first: uvicorn email_triage_rl_hackathon.server.app:app --port 8000)
-    HF_TOKEN=hf_xxx python inference.py
-
-    # Against deployed HF Space
-    ENV_BASE_URL=https://Shivacode-rl-hackathon.hf.space HF_TOKEN=hf_xxx python inference.py
-
-    # With Docker image
-    LOCAL_IMAGE_NAME=email-triage-rl-hackathon:latest HF_TOKEN=hf_xxx python inference.py
-
-    # Choose task level
-    TASK_LEVEL=hard HF_TOKEN=hf_xxx python inference.py
+Usage (local testing only):
+    # Against local server:
+    API_KEY=hf_xxx API_BASE_URL=https://router.huggingface.co/v1 python inference.py
 """
 
 import asyncio
@@ -36,29 +25,21 @@ from typing import List, Optional
 
 from openai import OpenAI
 
-# Auto-load .env if present — override=False ensures injected env vars (API_KEY,
-# API_BASE_URL) from the hackathon validator are NEVER overwritten by a local .env file.
-try:
-    from dotenv import load_dotenv
-    load_dotenv(override=False)
-except ImportError:
-    pass
-
 from email_triage_rl_hackathon import EmailTriageEnv, TriageAction
 
 # ── Config ────────────────────────────────────────────────────────────────────
-# API_KEY and API_BASE_URL are injected by the hackathon validator — always use them first.
-API_KEY          = os.getenv("API_KEY") or os.getenv("HF_TOKEN")
-API_BASE_URL     = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
-MODEL_NAME       = os.getenv("MODEL_NAME", "Qwen/Qwen2.5-72B-Instruct")
-ENV_BASE_URL     = os.getenv("ENV_BASE_URL", "http://localhost:8000")
-LOCAL_IMAGE_NAME = os.getenv("LOCAL_IMAGE_NAME", "")
-TASK_LEVEL       = os.getenv("TASK_LEVEL", "easy")   # easy | medium | hard
+# These are injected by the hackathon validator. Read them at call time inside main()
+# so they are resolved AFTER the validator sets them — never use a module-level default
+# that could silently bypass the proxy.
+MODEL_NAME       = os.environ.get("MODEL_NAME", "gpt-4o-mini")
+ENV_BASE_URL     = os.environ.get("ENV_BASE_URL", "http://localhost:8000")
+LOCAL_IMAGE_NAME = os.environ.get("LOCAL_IMAGE_NAME", "")
+TASK_LEVEL       = os.environ.get("TASK_LEVEL", "easy")   # easy | medium | hard
 BENCHMARK        = "email_triage_rl_hackathon"
-MAX_STEPS        = 15    # more than enough for all 3 levels (max 5 emails)
-TEMPERATURE      = 0.0   # deterministic for reproducibility
-MAX_TOKENS       = 300
-SUCCESS_SCORE_THRESHOLD = 0.5  # episode is "successful" if avg score >= 0.5
+MAX_STEPS        = 15
+TEMPERATURE      = 0.0
+MAX_TOKENS       = 512
+SUCCESS_SCORE_THRESHOLD = 0.5
 
 # ── Prompts ───────────────────────────────────────────────────────────────────
 SYSTEM_PROMPT = textwrap.dedent("""
@@ -156,8 +137,8 @@ def get_model_action(client: OpenAI, obs, step: int, history: List[str]) -> Tria
         return TriageAction(**data)
 
     except Exception as exc:
-        print(f"[DEBUG] Model parse error: {exc}", flush=True)
-        # Safe fallback action
+        print(f"[DEBUG] LLM call failed: {type(exc).__name__}: {exc}", flush=True)
+        # Safe fallback action — note: this means NO API call was made for this step
         return TriageAction(
             category="general",
             priority="low",
@@ -168,13 +149,26 @@ def get_model_action(client: OpenAI, obs, step: int, history: List[str]) -> Tria
 
 # ── Main episode loop ─────────────────────────────────────────────────────────
 async def main() -> None:
-    if not API_KEY:
+    # Read API credentials directly from environment — these are injected by the
+    # hackathon validator and must NOT be overridden by any .env file or default.
+    api_key      = os.environ.get("API_KEY") or os.environ.get("HF_TOKEN") or os.environ.get("OPENAI_API_KEY")
+    api_base_url = os.environ.get("API_BASE_URL")  # NO default — must be injected by validator
+
+    if not api_key:
         raise EnvironmentError(
             "API_KEY is not set. The hackathon validator injects API_KEY automatically.\n"
-            "For local testing: export HF_TOKEN=hf_your_token_here"
+            "For local testing: export API_KEY=hf_your_token_here"
         )
+    if not api_base_url:
+        # Fall back for local testing only; validator always injects this
+        api_base_url = "https://router.huggingface.co/v1"
+        print(f"[DEBUG] API_BASE_URL not set — using fallback: {api_base_url}", flush=True)
 
-    client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY)
+    print(f"[DEBUG] API_BASE_URL={api_base_url}", flush=True)
+    print(f"[DEBUG] MODEL_NAME={MODEL_NAME}", flush=True)
+
+    # Create OpenAI client pointed at the validator's LiteLLM proxy
+    client = OpenAI(api_key=api_key, base_url=api_base_url)
 
     # Connect to environment — Docker image or running server
     if LOCAL_IMAGE_NAME:
