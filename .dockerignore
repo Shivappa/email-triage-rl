@@ -1,0 +1,13 @@
+.venv/
+.hackathon-venv/
+.vscode/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.pytest_cache/
+tests/
+baseline.py
+README.md
+email_triage_rl_hackathon/outputs/
+email_triage_rl_hackathon/.dockerignore

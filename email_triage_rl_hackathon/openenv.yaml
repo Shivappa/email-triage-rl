@@ -1,0 +1,44 @@
+name: email-triage-env
+version: 0.1.0
+description: >
+  A real-world email triage RL environment where an AI agent classifies,
+  prioritises, routes, and replies to incoming emails across three task levels
+  (easy → medium → hard) with deterministic graders and partial-credit rewards.
+
+tags:
+  - openenv
+  - email-triage
+  - real-world
+  - nlp
+  - rl
+
+action_type: TriageAction
+observation_type: TriageObservation
+
+tasks:
+  - id: easy
+    description: "Classify email category, priority, and department (no reply required)"
+    difficulty: easy
+    num_emails: 5
+    max_score: 1.0
+  - id: medium
+    description: "Classify + write a short professional reply"
+    difficulty: medium
+    num_emails: 3
+    max_score: 1.0
+  - id: hard
+    description: "Classify + write a detailed, accurate reply with required keywords"
+    difficulty: hard
+    num_emails: 3
+    max_score: 1.0
+
+server:
+  port: 8000
+  workers: 2
+  env_var: TASK_LEVEL   # set to easy | medium | hard
+
+hub:
+  repo_id: Shivacode/rl-hackathon
+  space_sdk: docker
+  private: false
+

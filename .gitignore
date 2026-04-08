@@ -1,0 +1,20 @@
+# Python
+.venv/
+.hackathon-venv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# Secrets — NEVER commit these
+.env
+
+# Test / runtime artifacts
+.pytest_cache/
+outputs/
+email_triage_rl_hackathon/outputs/
+
+# Editor
+.vscode/
