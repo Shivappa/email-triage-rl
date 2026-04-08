@@ -32,7 +32,9 @@ from email_triage_rl_hackathon import EmailTriageEnv, TriageAction
 # so they are resolved AFTER the validator sets them — never use a module-level default
 # that could silently bypass the proxy.
 MODEL_NAME       = os.environ.get("MODEL_NAME", "gpt-4o-mini")
-ENV_BASE_URL     = os.environ.get("ENV_BASE_URL", "http://localhost:7860")
+# ENV_BASE_URL: validator injects this pointing to the running environment server.
+# Fallback to the HF Space URL for local testing without ENV_BASE_URL set.
+ENV_BASE_URL     = os.environ.get("ENV_BASE_URL", "https://Shivacode-rl-hackathon.hf.space")
 LOCAL_IMAGE_NAME = os.environ.get("LOCAL_IMAGE_NAME", "")
 TASK_LEVEL       = os.environ.get("TASK_LEVEL", "easy")   # easy | medium | hard
 BENCHMARK        = "email_triage_rl_hackathon"
@@ -217,9 +219,10 @@ async def main() -> None:
             if done:
                 break
 
-        # Compute final score: average reward across all steps, clamped to [0, 1]
+        # Compute final score: average reward, clamped strictly to (0.01, 0.99)
+        # Validator requires score strictly between 0 and 1 (not 0.0, not 1.0)
         score   = sum(rewards) / len(rewards) if rewards else 0.0
-        score   = min(max(score, 0.0), 1.0)
+        score   = min(max(score, 0.01), 0.99)
         success = score >= SUCCESS_SCORE_THRESHOLD
 
     except Exception as exc:

@@ -75,7 +75,7 @@ class EmailTriageEnvironment(Environment):
 
         return self._make_observation(
             feedback="New episode started. Please triage the email below.",
-            reward=0.0,
+            reward=0.01,
             done=False,
         )
 
@@ -112,7 +112,10 @@ class EmailTriageEnvironment(Environment):
         # Partial reward shaping: penalise missing reply on medium/hard
         reward = step_score
         if self._task_level in ("medium", "hard") and len(action.reply.strip()) < 20:
-            reward = max(0.0, reward - 0.1)  # small extra penalty for empty reply
+            reward = max(0.01, reward - 0.1)  # penalise empty reply, never below 0.01
+
+        # Clamp reward to strictly (0.01, 0.99) — validator requires score != 0.0 and != 1.0
+        reward = min(max(reward, 0.01), 0.99)
 
         # Advance to next email
         if self._queue:

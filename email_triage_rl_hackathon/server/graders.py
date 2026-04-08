@@ -1,7 +1,9 @@
 """
 graders.py — Deterministic graders for the three task levels.
 
-Each grader returns a score in [0.0, 1.0] and a feedback string.
+Each grader returns a score in (0.0, 1.0) exclusive and a feedback string.
+Scores are clamped to [0.01, 0.99] so they are always strictly between 0 and 1,
+which is required by the hackathon validator.
 
 Scoring rubrics:
   EASY   (0.0-1.0): correct category + priority + department
@@ -11,6 +13,11 @@ Scoring rubrics:
 
 from typing import Tuple
 from email_triage_rl_hackathon.server.email_data import Email
+
+
+def _clamp(score: float) -> float:
+    """Clamp score to (0.01, 0.99) — strictly between 0 and 1 as required by validator."""
+    return round(min(max(score, 0.01), 0.99), 4)
 
 
 def grade_easy(email: Email, category: str, priority: str, department: str) -> Tuple[float, str]:
@@ -48,7 +55,7 @@ def grade_easy(email: Email, category: str, priority: str, department: str) -> T
             f"❌ Department '{department}' is wrong (expected: '{email.gt_department}')."
         )
 
-    return round(score, 2), " ".join(feedback_parts)
+    return _clamp(score), " ".join(feedback_parts)
 
 
 def grade_medium(
@@ -126,7 +133,7 @@ def grade_medium(
                     f"{', '.join(email.gt_reply_keywords)}."
                 )
 
-    return round(min(score, 1.0), 2), " ".join(feedback_parts)
+    return _clamp(round(min(score, 1.0), 4)), " ".join(feedback_parts)
 
 
 def grade_hard(
@@ -202,7 +209,7 @@ def grade_hard(
                 f"{', '.join(matched) if matched else 'none'}."
             )
 
-    return round(min(score, 1.0), 2), " ".join(feedback_parts)
+    return _clamp(round(min(score, 1.0), 4)), " ".join(feedback_parts)
 
 
 def grade(email: Email, category: str, priority: str, department: str, reply: str) -> Tuple[float, str]:
