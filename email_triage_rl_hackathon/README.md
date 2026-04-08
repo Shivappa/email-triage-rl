@@ -1,8 +1,8 @@
 ---
-title: Email Triage Environment
+title: Email Triage RL Environment
 emoji: 📧
 colorFrom: blue
-colorTo: green
+colorTo: indigo
 sdk: docker
 pinned: false
 tags:

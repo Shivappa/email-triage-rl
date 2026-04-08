@@ -2,7 +2,7 @@
 title: Email Triage RL Environment
 emoji: 📧
 colorFrom: blue
-colorTo: green
+colorTo: indigo
 sdk: docker
 app_port: 7860
 pinned: false
