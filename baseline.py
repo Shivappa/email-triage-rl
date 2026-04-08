@@ -1,13 +1,13 @@
 """
 baseline.py — Baseline inference script for the Email Triage environment.
 
-Runs an OpenAI model against all three task levels via the WebSocket client
+Runs an OpenAI-compatible model against all three task levels via the WebSocket client
 and reports reproducible scores.
 
 Reads credentials from:
-  OPENAI_API_KEY  (required)
-  OPENAI_BASE_URL (optional, for custom endpoints)
-  MODEL_NAME      (optional, default: gpt-4o-mini)
+  API_KEY         (required — injected by hackathon validator)
+  API_BASE_URL    (required — injected by hackathon validator)
+  MODEL_NAME      (optional, default: Qwen/Qwen2.5-72B-Instruct)
   ENV_BASE_URL    (optional, default: http://localhost:8000)
 
 Usage:
@@ -15,10 +15,10 @@ Usage:
     uvicorn email_triage_rl_hackathon.server.app:app --port 8000
 
     # 2. Run the baseline:
-    OPENAI_API_KEY=sk-... python baseline.py
+    API_KEY=<key> API_BASE_URL=<url> python baseline.py
 
     # Or against a deployed HF Space:
-    ENV_BASE_URL=https://Shivacode-rl-hackathon.hf.space OPENAI_API_KEY=sk-... python baseline.py
+    ENV_BASE_URL=https://Shivacode-rl-hackathon.hf.space API_KEY=<key> API_BASE_URL=<url> python baseline.py
 """
 
 import os
@@ -38,14 +38,15 @@ from email_triage_rl_hackathon.client import EmailTriageEnv
 from email_triage_rl_hackathon.models import TriageAction
 
 # ── Config ────────────────────────────────────────────────────────
-API_KEY      = os.environ.get("OPENAI_API_KEY", "")
-BASE_URL     = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1")
-MODEL_NAME   = os.environ.get("MODEL_NAME", "gpt-4o-mini")
+# API_KEY and API_BASE_URL are injected by the hackathon validator — always use them first.
+API_KEY      = os.environ.get("API_KEY") or os.environ.get("HF_TOKEN") or os.environ.get("OPENAI_API_KEY", "")
+BASE_URL     = os.environ.get("API_BASE_URL") or os.environ.get("OPENAI_BASE_URL", "https://router.huggingface.co/v1")
+MODEL_NAME   = os.environ.get("MODEL_NAME", "Qwen/Qwen2.5-72B-Instruct")
 ENV_BASE_URL = os.environ.get("ENV_BASE_URL", "http://localhost:8000")
 HF_TOKEN     = os.environ.get("HF_TOKEN", "")   # used by openenv push / huggingface_hub
 
 if not API_KEY:
-    print("ERROR: OPENAI_API_KEY not set. Add it to your .env file.")
+    print("ERROR: API_KEY not set. The hackathon validator injects API_KEY automatically.")
     sys.exit(1)
 
 client = OpenAI(api_key=API_KEY, base_url=BASE_URL)
