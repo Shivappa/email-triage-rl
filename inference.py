@@ -32,7 +32,7 @@ from email_triage_rl_hackathon import EmailTriageEnv, TriageAction
 # so they are resolved AFTER the validator sets them — never use a module-level default
 # that could silently bypass the proxy.
 MODEL_NAME       = os.environ.get("MODEL_NAME", "gpt-4o-mini")
-ENV_BASE_URL     = os.environ.get("ENV_BASE_URL", "http://localhost:8000")
+ENV_BASE_URL     = os.environ.get("ENV_BASE_URL", "http://localhost:7860")
 LOCAL_IMAGE_NAME = os.environ.get("LOCAL_IMAGE_NAME", "")
 TASK_LEVEL       = os.environ.get("TASK_LEVEL", "easy")   # easy | medium | hard
 BENCHMARK        = "email_triage_rl_hackathon"
@@ -113,38 +113,27 @@ def build_user_prompt(obs, step: int, history: List[str]) -> str:
 def get_model_action(client: OpenAI, obs, step: int, history: List[str]) -> TriageAction:
     """Call the LLM and parse the JSON response into a TriageAction."""
     user_prompt = build_user_prompt(obs, step, history)
-    try:
-        completion = client.chat.completions.create(
-            model=MODEL_NAME,
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user",   "content": user_prompt},
-            ],
-            temperature=TEMPERATURE,
-            max_tokens=MAX_TOKENS,
-            stream=False,
-        )
-        content = (completion.choices[0].message.content or "").strip()
+    completion = client.chat.completions.create(
+        model=MODEL_NAME,
+        messages=[
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user",   "content": user_prompt},
+        ],
+        temperature=TEMPERATURE,
+        max_tokens=MAX_TOKENS,
+        stream=False,
+    )
+    content = (completion.choices[0].message.content or "").strip()
 
-        # Strip markdown code fences if present
-        if content.startswith("```"):
-            content = content.split("```")[1]
-            if content.startswith("json"):
-                content = content[4:]
-        content = content.strip()
+    # Strip markdown code fences if present
+    if content.startswith("```"):
+        content = content.split("```")[1]
+        if content.startswith("json"):
+            content = content[4:]
+    content = content.strip()
 
-        data = json.loads(content)
-        return TriageAction(**data)
-
-    except Exception as exc:
-        print(f"[DEBUG] LLM call failed: {type(exc).__name__}: {exc}", flush=True)
-        # Safe fallback action — note: this means NO API call was made for this step
-        return TriageAction(
-            category="general",
-            priority="low",
-            department="support",
-            reply="",
-        )
+    data = json.loads(content)
+    return TriageAction(**data)
 
 
 # ── Main episode loop ─────────────────────────────────────────────────────────
