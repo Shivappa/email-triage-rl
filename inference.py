@@ -36,10 +36,11 @@ from typing import List, Optional
 
 from openai import OpenAI
 
-# Auto-load .env if present
+# Auto-load .env if present — override=False ensures injected env vars (API_KEY,
+# API_BASE_URL) from the hackathon validator are NEVER overwritten by a local .env file.
 try:
     from dotenv import load_dotenv
-    load_dotenv()
+    load_dotenv(override=False)
 except ImportError:
     pass
 
@@ -169,8 +170,8 @@ def get_model_action(client: OpenAI, obs, step: int, history: List[str]) -> Tria
 async def main() -> None:
     if not API_KEY:
         raise EnvironmentError(
-            "HF_TOKEN is not set. Add it to your .env file or export it:\n"
-            "  export HF_TOKEN=hf_your_token_here"
+            "API_KEY is not set. The hackathon validator injects API_KEY automatically.\n"
+            "For local testing: export HF_TOKEN=hf_your_token_here"
         )
 
     client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY)

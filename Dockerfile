@@ -29,12 +29,17 @@ ENV PORT=7860
 # ── Install only what the base image does NOT already provide ─
 # openenv-core is not pre-installed in the base image.
 # fastapi + uvicorn are already present — uv skips them.
+# openai + python-dotenv are needed by inference.py.
 COPY email_triage_rl_hackathon/server/requirements.txt ./requirements.txt
-RUN uv pip install --no-cache -r requirements.txt
+RUN uv pip install --no-cache -r requirements.txt && \
+    uv pip install --no-cache openai python-dotenv
 
 # ── Copy package source and install it ────────────────────────
 COPY email_triage_rl_hackathon/ ./email_triage_rl_hackathon/
 RUN uv pip install --no-cache ./email_triage_rl_hackathon/
+
+# ── Copy inference script ──────────────────────────────────────
+COPY inference.py ./inference.py
 
 # ── Runtime output directories ────────────────────────────────
 RUN mkdir -p email_triage_rl_hackathon/outputs/logs \
