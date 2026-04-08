@@ -6,12 +6,16 @@ colorTo: indigo
 sdk: docker
 app_port: 7860
 pinned: false
+license: apache-2.0
+short_description: Classify, prioritise, route and reply to emails — 3 task levels with partial-credit rewards
 tags:
   - openenv
   - email-triage
   - rl
   - real-world
   - nlp
+  - reinforcement-learning
+  - environment
 ---
 
 # 📧 Email Triage Environment
