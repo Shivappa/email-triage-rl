@@ -1,3 +1,19 @@
+---
+title: Email Triage RL Environment
+emoji: 📧
+colorFrom: blue
+colorTo: green
+sdk: docker
+pinned: false
+app_port: 7860
+tags:
+  - openenv
+  - email-triage
+  - rl
+  - real-world
+  - nlp
+---
+
 # Hackathon — Meta x PyTorch OpenEnv
 
 ## Structure
