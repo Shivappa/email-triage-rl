@@ -217,15 +217,9 @@ async def main() -> None:
 
     client = OpenAI(api_key=api_key, base_url=api_base_url)
 
-    # Determine which task levels to run.
-    # If TASK_LEVEL is set to a specific level, run only that one;
-    # otherwise run ALL THREE so the validator sees 3 graded tasks.
-    requested = os.environ.get("TASK_LEVEL", "").strip().lower()
-    if requested in ("easy", "medium", "hard"):
-        task_levels = [requested]
-    else:
-        task_levels = ["easy", "medium", "hard"]
-
+    # Always run all three task levels — the validator requires at least 3 graded tasks.
+    # TASK_LEVEL env var is intentionally ignored here; it only affects the uvicorn server.
+    task_levels = ["easy", "medium", "hard"]
     print(f"[DEBUG] Running task levels: {task_levels}", flush=True)
 
     if LOCAL_IMAGE_NAME:

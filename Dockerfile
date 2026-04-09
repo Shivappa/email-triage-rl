@@ -23,7 +23,8 @@ ENV PYTHONPATH=/app:/app/src
 ENV ENABLE_WEB_INTERFACE=true
 
 # ── Runtime config ────────────────────────────────────────────
-ENV TASK_LEVEL=easy
+# Do NOT set TASK_LEVEL — inference.py must run all 3 levels for the validator.
+# The uvicorn server reads TASK_LEVEL at request time; leaving it unset is fine.
 ENV PORT=7860
 
 # ── Install only what the base image does NOT already provide ─
